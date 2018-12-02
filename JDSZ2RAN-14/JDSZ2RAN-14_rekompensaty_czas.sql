@@ -1,5 +1,6 @@
 rok
-select extract(year from data_utworzenia)as lata,avg(kwota_rekompensaty)as srednia,sum(kwota_rekompensaty) as suma_wyplat,count(case when stan_wniosku = 'wyplacony' then id
+select extract(year from data_utworzenia)as lata,avg(kwota_rekompensaty)as srednia,sum(kwota_rekompensaty) as suma_wyplat,
+count(case when stan_wniosku = 'wyplacony' then id
  when stan_wniosku = 'zamkniety' and kwota_rekompensaty >0 then id
   when stan_wniosku = 'wygrany w sadzie' then id
   end) as liczba_wniosków
@@ -9,7 +10,9 @@ group by extract(year from data_utworzenia)
 
 
 kwartal
-select extract(year from data_utworzenia)as lata,date_part('quarter',data_utworzenia)as kwartal,avg(kwota_rekompensaty)as srednia,sum(kwota_rekompensaty) as suma_wyplat,count(case when stan_wniosku = 'wyplacony' then id
+select extract(year from data_utworzenia)as lata,date_part('quarter',data_utworzenia)as kwartal,
+avg(kwota_rekompensaty)as srednia,sum(kwota_rekompensaty) as suma_wyplat,
+count(case when stan_wniosku = 'wyplacony' then id
  when stan_wniosku = 'zamkniety' and kwota_rekompensaty >0 then id
   when stan_wniosku = 'wygrany w sadzie' then id
   end) as liczba_wniosków
