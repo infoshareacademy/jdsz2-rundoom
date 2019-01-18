@@ -1,0 +1,1 @@
+# Zasady pracy nad projektem Python grupy RUNDOOM
