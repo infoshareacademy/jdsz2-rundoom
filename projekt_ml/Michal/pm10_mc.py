@@ -1,15 +1,22 @@
 import pandas as pd
+import numpy as np
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.svm import SVR
 from xgboost import XGBRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import datetime
 import time
+import matplotlib.pyplot as plt
+from sklearn.feature_selection import RFECV
 from sklearn.model_selection import cross_val_score
-from tpot import TPOTClassifier
+import warnings; warnings.simplefilter('ignore')
+
 
 
 # read data to dataframe
@@ -19,51 +26,134 @@ df = pd.read_excel('pyly_2.xlsx', sheet_name='Worksheet')
 df['Godzina'] = df['Czas mierzenia'].apply(lambda x: int(datetime.datetime.strptime(x, '%m/%d/%Y %H:%M').time().hour))
 df['Dzień tygodnia'] = df['Czas mierzenia'].apply(lambda x: int(datetime.datetime.strptime(x, '%m/%d/%Y %H:%M').date().weekday()))
 df['Miesiąc'] = df['Czas mierzenia'].apply(lambda x: int(datetime.datetime.strptime(x, '%m/%d/%Y %H:%M').date().month))
+df2 = df['Czas mierzenia']
+
 
 # prediction time offset
 dni_prognozy = 12
 
-# creating prediction column
-df['PM10_P'] = df['PM10'].shift(periods=-dni_prognozy)
-df = df.dropna(subset=['PM10_P'])
+# droping first three rows od data set - not clean values
+df = df.drop(df.index[[0, 1, 2]])
+df = df.reset_index(drop=True)
 
-# identify feature columns and target
-X = df[['PM1', 'PM25', 'PM10', 'Temperatura', 'Ciśnienie', 'Prędkość wiatru', 'Wind bearing', 'Godzina', 'Dzień tygodnia', 'Miesiąc']]
-y = df['PM10_P']
+# creating target data (y) for train and test
+df['PM10_P'] = df['PM10'].shift(periods=-dni_prognozy)
+y = df['PM10_P'].dropna()
+
+# removing columns unused columns from data set
+columns_to_delete = ["ID czujnika", "AQI", "O3", "CO", "SO2", "NO2", "C6H6", "CH2O", "Szerokość geo.", "Wysokość geo.", "Epoch", "is_forecast", "Czas mierzenia", "PM10_P"]
+df = df.drop(columns=columns_to_delete, axis=1)
+
+# creating train, test data set
+X = df[:-dni_prognozy]
+
+#creating data set for predictions
+X_prog = df[-dni_prognozy:]
+
 
 # split data set into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=101)
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
 
 
-def prediction(model):
-    model.fit(X_train, y_train.values.ravel())
-    # cross validation
-    print("____CROSS VALIDATION____")
-    cv_score = abs(cross_val_score(model, X_train, y_train, cv=5, scoring='neg_mean_absolute_error'))
-    print("mean cross validation score (mae) is {}".format(cv_score.mean()))
-    y_pred = model.predict(X_test)
+def prediction(model, model_name):
+    model.fit(train_X, train_y)
 
-    # saving predictions to file
-    # dataset = pd.DataFrame({'y_pred': y_pred})
-    # dataset['y_test'] = y_test
-    # dataset = dataset.dropna().reset_index()
-    # dataset.to_csv('wyniki.csv', sep=';')
+    pred_test_y = model.predict(test_X)
+    pred_y = model.predict(X)
+    prog_y = model.predict(X_prog)
 
-    mae = mean_absolute_error(y_test, y_pred)
-    print("{} - Mean Absolute Error:  {}".format(model, mae))
+    mae = mean_absolute_error(test_y, pred_test_y)
+
+    print("Mean Absolute Error for {}:  {}".format(model_name, mae))
+
+    plt.figure(figsize=(10, 10))
+    plt.title('Dopasowanie modelu dla '+model_name)
+    plt.plot(df2[-50 - dni_prognozy:-dni_prognozy].values, y[-50:], label='real')
+    plt.plot(df2[-50 - dni_prognozy:-dni_prognozy].values, pred_y[-50:], label='pred')
+    # plt.plot(np.arange(50, 51+dni_prognozy, 1), np.concatenate([pred_y[-1].ravel(), prog_y.ravel()]), label='prog')
+    plt.xlabel('Data i godzina')
+    plt.ylabel('PM 10')
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(10, 10))
+    plt.title('Prognoza dla '+model_name)
+    plt.plot(df2[-50 - dni_prognozy:-dni_prognozy].values, y[-50:], label='real')
+    # plt.plot(np.arange(1, 51, 1), pred_y[-50:], label='pred')
+    plt.plot(df2[-1 - dni_prognozy:].values, np.concatenate([y[-1:], prog_y.ravel()]), label='prog')
+    plt.xlabel('Data i godzina')
+    plt.ylabel('PM 10')
+    plt.legend()
+    plt.show()
+
 
 # Prediction for LinearRegression
 model_linreg = LinearRegression()
-prediction(model_linreg)
-# Prediction for RandomForest
+prediction(model_linreg, 'Linear Regression')
+
+# Prediction for LogisticRegression
+model_logreg = LogisticRegression()
+prediction(model_logreg, 'Logistic Regression')
+
+# Prediction for DecisionTreeRegressor
+model_dtreg = DecisionTreeRegressor()
+prediction(model_dtreg, 'Decision Tree Regressor')
+
+# Prediction for Suport Vector Regressor
+model_svreg = SVR()
+prediction(model_svreg, 'Support Vector Regressor')
+
+# Prediction for Random Forest Regressor
 model_rf = RandomForestRegressor()
-prediction(model_rf)
-# Prediction for XGBoost
+prediction(model_rf, 'Random Forest Regressor')
+
+# Prediction for XGBoost Regressor
 model_xgb = XGBRegressor()
-prediction(model_xgb)
+prediction(model_xgb, 'XGBoost Regressor')
 
 
+# FEATURE SELECTION
 
+def feature_selection(model, model_name):
+    xs = train_X
+    ys = train_y
+
+    rfecv = RFECV(estimator=model, cv=15)
+    rfecv = rfecv.fit(xs, ys.values.flatten())
+
+    print("Optymalna ilość cech dla "+model_name, rfecv.n_features_)
+    print("Najlepsze Cechy:", xs.columns[rfecv.support_].values)
+
+    plt.figure()
+    plt.xlabel("Ilość cech wybranych dla "+model_name)
+    plt.ylabel("Wynik cross validacji dla wybranych cech")
+    plt.plot(range(1, len(rfecv.grid_scores_) + 1), rfecv.grid_scores_)
+    plt.show()
+
+
+# Feature selection for LinearRegression
+model_linreg = LinearRegression()
+feature_selection(model_linreg, 'Linear Regression')
+
+# Feature selection for LinearRegression
+model_logreg = LogisticRegression()
+feature_selection(model_logreg, 'Logistic Regression')
+
+# Feature selection for DecisionTreeRegressor
+model_dtreg = DecisionTreeRegressor()
+feature_selection(model_dtreg, 'Decision Tree Regressor')
+
+# Feature selection for Suport Vector Regressor
+model_svreg = SVR()
+feature_selection(model_svreg, 'Support Vector Regressor')
+
+# Feature selection for Random Forest Regressor
+model_rf = RandomForestRegressor()
+feature_selection(model_rf, 'Random Forest Regressor')
+
+# Feature selection for XGBoost Regressor
+model_xgb = XGBRegressor()
+feature_selection(model_xgb, 'XGBoost Regressor')
 
 
 def select_model(X, Y):
@@ -126,8 +216,8 @@ def select_model(X, Y):
     return best_models
 # 'bootstrap': 'True', 'criterion': 'mae', 'max_features': 0.55, 'min_samples_leaf': 1, 'min_samples_split': 4, 'n_estimators': 20
 
-X, y = X_train, y_train
-best = select_model(X, y)
+# X, y = X_train, y_train
+# best = select_model(X, y)
 
 # RandomForest
 # mea: 9.721994005641747
