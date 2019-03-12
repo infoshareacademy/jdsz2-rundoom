@@ -3,9 +3,7 @@ import numpy as np
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.svm import SVR
 from xgboost import XGBRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import train_test_split
@@ -18,6 +16,8 @@ from sklearn.model_selection import cross_val_score
 import warnings; warnings.simplefilter('ignore')
 
 
+# ----------------------------------------------------------------------
+# DATASETS PREPARATION
 
 # read data to dataframe
 df = pd.read_excel('pyly_2.xlsx', sheet_name='Worksheet')
@@ -54,7 +54,9 @@ X_prog = df[-dni_prognozy:]
 # split data set into train and test
 train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
 
-
+# ----------------------------------------------------------------------
+# PREDICTION - DEFAULT PARAMETERS, ALL FEATURES
+print('---- PREDICTION - DEFAULT PARAMETERS, ALL FEATURES ----')
 def prediction(model, model_name):
     model.fit(train_X, train_y)
 
@@ -91,17 +93,9 @@ def prediction(model, model_name):
 model_linreg = LinearRegression()
 prediction(model_linreg, 'Linear Regression')
 
-# Prediction for LogisticRegression
-model_logreg = LogisticRegression()
-prediction(model_logreg, 'Logistic Regression')
-
 # Prediction for DecisionTreeRegressor
 model_dtreg = DecisionTreeRegressor()
 prediction(model_dtreg, 'Decision Tree Regressor')
-
-# Prediction for Suport Vector Regressor
-model_svreg = SVR()
-prediction(model_svreg, 'Support Vector Regressor')
 
 # Prediction for Random Forest Regressor
 model_rf = RandomForestRegressor()
@@ -112,7 +106,10 @@ model_xgb = XGBRegressor()
 prediction(model_xgb, 'XGBoost Regressor')
 
 
+# ----------------------------------------------------------------------
 # FEATURE SELECTION
+print('---- FEATURE SELECTION ----')
+
 
 def feature_selection(model, model_name):
     xs = train_X
@@ -130,22 +127,13 @@ def feature_selection(model, model_name):
     plt.plot(range(1, len(rfecv.grid_scores_) + 1), rfecv.grid_scores_)
     plt.show()
 
-
 # Feature selection for LinearRegression
 model_linreg = LinearRegression()
 feature_selection(model_linreg, 'Linear Regression')
 
-# Feature selection for LinearRegression
-model_logreg = LogisticRegression()
-feature_selection(model_logreg, 'Logistic Regression')
-
 # Feature selection for DecisionTreeRegressor
 model_dtreg = DecisionTreeRegressor()
 feature_selection(model_dtreg, 'Decision Tree Regressor')
-
-# Feature selection for Suport Vector Regressor
-model_svreg = SVR()
-feature_selection(model_svreg, 'Support Vector Regressor')
 
 # Feature selection for Random Forest Regressor
 model_rf = RandomForestRegressor()
@@ -155,26 +143,72 @@ feature_selection(model_rf, 'Random Forest Regressor')
 model_xgb = XGBRegressor()
 feature_selection(model_xgb, 'XGBoost Regressor')
 
+# ----------------------------------------------------------------------
+# PREDICTION - DEFAULT PARAMETERS, LIMITED FEATURES
+print('---- PREDICTION - DEFAULT PARAMETERS, LIMITED FEATURES ----')
+
+# Prediction for LinearRegression
+# Optymalna ilość cech dla Linear Regression 11
+# all features selected
+X = df[:-dni_prognozy]
+X_prog = df[-dni_prognozy:]
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
+model_linreg = LinearRegression()
+prediction(model_linreg, 'Linear Regression')
+
+# Prediction for DecisionTreeRegressor
+# Optymalna ilość cech dla Decision Tree Regressor 10
+# excluding PM25 feature
+X = df[:-dni_prognozy]
+X_prog = df[-dni_prognozy:]
+X = X.drop('PM25', axis=1)
+X_prog = X_prog.drop('PM25', axis=1)
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
+model_dtreg = DecisionTreeRegressor()
+prediction(model_dtreg, 'Decision Tree Regressor')
+
+# Prediction for Random Forest Regressor
+# Optymalna ilość cech dla XGBoost Regressor 11
+# all features selected
+X = df[:-dni_prognozy]
+X_prog = df[-dni_prognozy:]
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
+model_rf = RandomForestRegressor()
+prediction(model_rf, 'Random Forest Regressor')
+
+# Prediction for XGBoost Regressor
+# Optymalna ilość cech dla XGBoost Regressor 10
+# excluding PM25 feature
+X = df[:-dni_prognozy]
+X_prog = df[-dni_prognozy:]
+X = X.drop('PM25', axis=1)
+X_prog = X_prog.drop('PM25', axis=1)
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
+model_xgb = XGBRegressor()
+prediction(model_xgb, 'XGBoost Regressor')
+
+# ----------------------------------------------------------------------
+# PARAMETERES TUNNING
+print('---- PARAMETERES TUNNING ----')
 
 def select_model(X, Y):
     best_models = {}
     models = [
+        # {
+        #     'name': 'LinearRegression',
+        #     'estimator': LinearRegression(),
+        #     'hyperparameters': {},
+        # },
         {
-            'name': 'LinearRegression',
-            'estimator': LinearRegression(),
-            'hyperparameters': {},
-        },
-        {
-            'name': 'KNeighbors',
-            'estimator': KNeighborsRegressor(),
+            'name': 'Decision Tree Regressor',
+            'estimator': DecisionTreeRegressor(),
             'hyperparameters': {
-                'n_neighbors': range(3, 50, 3),
-                'weights': ['distance', 'uniform'],
-                'algorithm': ['auto'],
-                'leaf_size': list(range(10, 51, 10)),
+                'criterion': ['mae'],
+                'max_features': ['auto'],
+                'min_samples_leaf': [1, 2, 5],
+                'min_samples_split': [2, 4, 6],
             }
         },
-
         {
             'name': 'RandomForest',
             'estimator': RandomForestRegressor(),
@@ -184,11 +218,10 @@ def select_model(X, Y):
                 'max_features': ['auto'],
                 'min_samples_leaf': [1, 2, 5],
                 'min_samples_split': [2, 4, 6],
-                'n_estimators': [10, 20]
+                'n_estimators': [10, 20, 100]
 
             }
         },
-
         {
             'name': 'XGBoost',
             'estimator': XGBRegressor(),
@@ -214,10 +247,13 @@ def select_model(X, Y):
         print('mea: {}\n{} --{:.2f} seconds.'.format(str(abs(grid.best_score_)), str(grid.best_params_), run))
 
     return best_models
-# 'bootstrap': 'True', 'criterion': 'mae', 'max_features': 0.55, 'min_samples_leaf': 1, 'min_samples_split': 4, 'n_estimators': 20
 
-# X, y = X_train, y_train
-# best = select_model(X, y)
+
+X = df[:-dni_prognozy]
+X = X.drop('PM25', axis=1)
+
+
+best = select_model(X, y)
 
 # RandomForest
 # mea: 9.721994005641747
