@@ -91,6 +91,7 @@ def prediction(model, model_name, wykres=False):
         plt.ylabel('PM 10')
         plt.legend()
         plt.show()
+    return model
 
 
 # Prediction for LinearRegression
@@ -219,9 +220,12 @@ def select_model(X, Y):
                 'bootstrap': ['True'],
                 'criterion': ['mae'],
                 'max_features': ['auto'],
-                # 'min_samples_leaf': [1, 2, 5],
-                # 'min_samples_split': [2, 4, 6],
-                'n_estimators': [10, 20, 100]
+                # 'min_samples_leaf': [1, 2, 5], # 2
+                'min_samples_leaf': [1, 2], # 2
+                # 'min_samples_split': [2, 4, 6], # 2
+                'min_samples_split': [2, 4], # 2
+                # 'n_estimators': [10, 20, 100] # 100
+                'n_estimators': [200, 100] # 100
 
             }
         },
@@ -229,11 +233,15 @@ def select_model(X, Y):
             'name': 'XGBoost',
             'estimator': XGBRegressor(),
             'hyperparameters': {
-                # 'gamma': [i / 10.0 for i in range(0, 5)],
-                # 'learning_rate': [0.01, 0.1, 0.2],
-                # 'n_estimators': range(100, 200, 10),
-                # 'max_depth': [3, 5, 7, 9],
-                'min_child_weight': [1, 3, 5, 6]
+                'gamma': [i / 10.0 for i in range(0, 2)],
+                # 'learning_rate': [0.01, 0.1, 0.2], # 0.2
+                'learning_rate': [0.1, 0.2], # 0.2
+                # 'n_estimators': range(100, 200, 10), # 100
+                'n_estimators': range(100, 110, 10),
+                # 'max_depth': [3, 5, 7, 9], #9
+                'max_depth': [7, 9], #9
+                # 'min_child_weight': [1, 3, 5, 6] # 3
+                'min_child_weight': [1, 3] # 3
             }
         }
 
@@ -243,7 +251,7 @@ def select_model(X, Y):
         print('\n', '-'*20, '\n', model['name'])
         start = time.perf_counter()
         grid = GridSearchCV(model['estimator'], param_grid=model['hyperparameters'], cv=3, scoring="neg_mean_absolute_error",
-                            verbose=False, n_jobs=-1)
+                            verbose=False, n_jobs=2)
         # grid.fit(X, y.values.ravel())
         grid.fit(train_X.values, train_y.values)
         best_models[model['name']] = {'score': grid.best_score_, 'params': grid.best_params_}
@@ -256,11 +264,38 @@ def select_model(X, Y):
 X = df[:-offset]
 X = X.drop('PM25', axis=1)
 
-best = select_model(X, y)
+# best = select_model(X, y)
 
 # --------- Piklowanie modelu ze słownikiem
-# with open('best.pickle', 'wb') as f:
+# with open('../Jupyter/best.pickle', 'wb') as f:
 #     pickle.dump(best, f)
+
+X = df[:-offset]
+X['TC'] = X['Wind bearing']*X['Temperatura']
+X['TC'] = X['Temperatura']**2
+X_prog = df[df.shape[0]-offset:]
+X_prog['TC'] = X_prog['Wind bearing']*X_prog['Temperatura']
+X_prog['TC'] = X_prog['Temperatura']**2
+columns_to_delete = ['PM25']
+X = X.drop(columns=columns_to_delete, axis=1)
+X_prog = X_prog.drop(columns=columns_to_delete, axis=1)
+train_X, test_X, train_y, test_y = train_test_split(X, y, test_size=0.2, random_state=101)
+model = XGBRegressor(gamma=0, learning_rate=0.1, max_depth=9, min_child_weight=1, n_estimators=100,
+                     random_state=101)
+
+# prediction(model, 'XGBRegressor', wykres=True)
+
+model.fit(train_X, train_y)
+
+pred_test_y = model.predict(test_X)
+pred_y = model.predict(X)
+prog_y = model.predict(X_prog)
+
+mae = mean_absolute_error(test_y, pred_test_y)
+
+print("Mean Absolute Error for XGBRegressor: {}".format(mae))
+
+errors = np.abs(test_y - pred_test_y)
 
 #Średnia Krocząca
 
